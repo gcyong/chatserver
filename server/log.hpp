@@ -1,6 +1,8 @@
 #ifndef CHATSERVER_SERVER_LOG_HPP
 #define CHATSERVER_SERVER_LOG_HPP
 
+#include <map>
+#include <ctime>
 #include <string>
 #include <ostream>
 #include <chrono>
@@ -17,6 +19,8 @@ public :
         kError,
         kFatal,
     };
+    static std::map<Level, std::string> s_LevelToStr;
+    static void InitLevelToStringMapper();
 
 public :
     Log(std::ostream& out);
