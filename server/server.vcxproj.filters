@@ -24,6 +24,9 @@
     <ClInclude Include="log.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="message.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="server.cpp">

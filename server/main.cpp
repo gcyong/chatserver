@@ -1,9 +1,9 @@
+#include <type_traits>
 #include <iostream>
 
 #include "log.hpp"
 #include "server.hpp"
 #include "client.hpp"
-
 
 int main(int argc, char* argv[])
 {
@@ -19,8 +19,10 @@ int main(int argc, char* argv[])
 
     if (server)
     {
-        log << Log::Level::kInfo << "Successful initialization chatserver...";
-
+        log << Log::Level::kInfo
+            << "Successful initialization chatserver..."
+            << ("\t\tIP = " + server.GetBoundIPAddress()).c_str()
+            << ("\t\tPORT = " + std::to_string(server.GetPort())).c_str();
     }
     else
     {
