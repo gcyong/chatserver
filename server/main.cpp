@@ -23,6 +23,9 @@ int main(int argc, char* argv[])
             << "Successful initialization chatserver..."
             << ("\t\tIP = " + server.GetBoundIPAddress()).c_str()
             << ("\t\tPORT = " + std::to_string(server.GetPort())).c_str();
+
+        //server.RunAcceptThread();
+        //server.RunClientCommThread();
     }
     else
     {

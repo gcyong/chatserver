@@ -20,6 +20,15 @@ public :
         kRequestOk,
         kFailedMessageRead,
         kFailedMessageAnalysis,
+        kRegisterNickname,
+        kUnknownError,
+        kInvalidNicknameLength,
+        kInvalidNicknamePacket,
+        kInvalidGeneralMessageLength,
+        kInvalidGeneralMessagePacket,
+        kUnregisteredUser,
+        kNicknameEmpty,
+        kNicknameAlreadyExist,
     };
 
     std::uint32_t uMessageType;

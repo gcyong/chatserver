@@ -97,6 +97,13 @@ bool Server::UnregisterClient(SOCKET hClientSocket)
 {
     if (m_bGood && !m_bStop)
     {
+        auto iter = m_NicknameReverseMap.find(hClientSocket);
+        if (iter != m_NicknameReverseMap.end())
+        {
+            m_NicknameMap.erase(iter->second);
+            m_NicknameReverseMap.erase(iter);
+        }
+
         auto item = m_ClientsMap.find(hClientSocket);
         if (item != m_ClientsMap.end()) {
             m_ClientsList[item->second].first = INVALID_SOCKET;
@@ -147,6 +154,7 @@ void Server::RunClientCommThread()
                 {
                     if (self->AnalyzeMessage(buffer, &request))
                     {
+                        request.hConnectedSocket = hConnectedHandle;
                         self->ProcessRequestMessage(request, &response, &bBroadcast);
                     }
                     else
@@ -345,7 +353,153 @@ void Server::SetErrorNotificationMessage(Message* pMessage, Message::AdminMessag
     }
 }
 
-void Server::ProcessRequestMessage(const Message& requestMessage, Message* pResponseMessage, bool* pIsBroadcastMessage)
+bool Server::ProcessRequestMessage(const Message& requestMessage, Message* pResponseMessage, bool* pIsBroadcastMessage)
 {
+    if (pResponseMessage != nullptr && pIsBroadcastMessage != nullptr)
+    {
+        switch (static_cast<Message::MessageType>(requestMessage.uMessageType))
+        {
+        case Message::MessageType::kAdminMessage :
+        {
+            Message::AdminMessageType adminMessageType = Message::AdminMessageType::kUnknownError;
+            // 4 bytes : message detail
+            //
+            // message detils
+            // kRegisterNickname : 4 bytes + alpha (nickname length) + (nickname)
+            if (requestMessage.aRawMessage.size() >= 4)
+            {
+                const char* pBuffer = requestMessage.aRawMessage.data();
+                uint32_t uMessageDetail = *reinterpret_cast<const uint32_t*>(pBuffer);
+                switch (static_cast<Message::AdminMessageType>(uMessageDetail))
+                {
+                case Message::AdminMessageType::kRegisterNickname :
+                {
+                    if (requestMessage.aRawMessage.size() >= 8)
+                    {
+                        uint32_t uNicknameSize = *reinterpret_cast<const uint32_t*>(pBuffer + 4);
+                        if (requestMessage.aRawMessage.size() == 8 + uNicknameSize)
+                        {
+                            std::string strNickname;
+                            for (uint32_t uOffset = 0; uOffset < uNicknameSize; ++uOffset)
+                            {
+                                strNickname.push_back(*(pBuffer + 8 + uOffset));
+                            }
 
+                            if (!strNickname.empty() && m_NicknameMap.find(strNickname) == m_NicknameMap.end())
+                            {
+                                m_NicknameMap[strNickname] = requestMessage.hConnectedSocket;
+                                m_NicknameReverseMap[requestMessage.hConnectedSocket] = strNickname;
+                                adminMessageType = Message::AdminMessageType::kRequestOk;
+                            }
+                            else
+                            {
+                                if (strNickname.empty())
+                                {
+                                    adminMessageType = Message::AdminMessageType::kNicknameEmpty;
+                                }
+                                else
+                                {
+                                    adminMessageType = Message::AdminMessageType::kNicknameAlreadyExist;
+                                }
+                            }
+                        }
+                        else
+                        {
+                            adminMessageType = Message::AdminMessageType::kInvalidNicknameLength;
+                        }
+                    }
+                    else
+                    {
+                        adminMessageType = Message::AdminMessageType::kInvalidNicknamePacket;
+                    }
+                    break;
+                }
+                default :
+                {
+                    adminMessageType = Message::AdminMessageType::kUnknownError;
+                    break;
+                }
+                }
+            }
+
+            if (adminMessageType == Message::AdminMessageType::kRequestOk)
+            {
+                SetErrorNotificationMessage(pResponseMessage, adminMessageType);
+            }           
+            *pIsBroadcastMessage = false;
+            return true;
+        }
+        case Message::MessageType::kGeneralMessage :
+        {
+            Message::AdminMessageType adminMessageType = Message::AdminMessageType::kUnknownError;
+
+            // 4 bytes : sender nickname size (= n)
+            // 4 bytes : content size (= m)
+            // n bytes : sender nickname (UTF-8)
+            // m bytes : content (UTF-8)
+            if (requestMessage.aRawMessage.size() >= 8)
+            {
+                const char* pBuffer = requestMessage.aRawMessage.data();
+
+                uint32_t uNicknameSize = *reinterpret_cast<const uint32_t*>(pBuffer);
+                uint32_t uContentSize = *reinterpret_cast<const uint32_t*>(pBuffer + 4);
+
+                if (requestMessage.aRawMessage.size() == 8 + uNicknameSize + uContentSize)
+                {
+                    std::string strNickname;
+                    for (uint32_t offset = 0; offset < uNicknameSize; ++offset)
+                    {
+                        strNickname.push_back(pBuffer[offset + 8]);
+                    }
+
+                    if (m_NicknameMap.find(strNickname) != m_NicknameMap.end())
+                    {
+                        pResponseMessage->uMessageType = static_cast<typename decltype(pResponseMessage->uMessageType)>(Message::MessageType::kGeneralMessage);
+                        pResponseMessage->uMessageLength = sizeof(pResponseMessage->uMessageType);
+                        pResponseMessage->aRawMessage.resize(pResponseMessage->uMessageLength);
+                        CopyMemory(pResponseMessage->aRawMessage.data(), pBuffer, uNicknameSize + uContentSize + 8);
+                        *pIsBroadcastMessage = true;
+
+                        adminMessageType = Message::AdminMessageType::kRequestOk;
+                    }
+                    else
+                    {
+                        adminMessageType = Message::AdminMessageType::kUnregisteredUser;
+                        
+                    }
+                }
+                else
+                {
+                    adminMessageType = Message::AdminMessageType::kInvalidGeneralMessageLength;
+                }
+            }
+            else
+            {
+                adminMessageType = Message::AdminMessageType::kInvalidGeneralMessagePacket;
+            }
+
+            if (adminMessageType != Message::AdminMessageType::kRequestOk)
+            {
+                SetErrorNotificationMessage(pResponseMessage, adminMessageType);
+            }
+            break;
+        }
+        case Message::MessageType::kSecretMessage :
+        {
+            *pIsBroadcastMessage = false;
+            break;
+        }
+        case Message::MessageType::kFileMessage :
+        {
+            *pIsBroadcastMessage = false;
+            break;
+        }
+        default :
+        {
+            break;
+        }
+        }
+    }
+
+    return false;
 }

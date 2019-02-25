@@ -37,7 +37,7 @@ public :
     bool AnalyzeMessage(const std::vector<char>& aRawBuffer, Message* pResultMessage);
     bool WriteMessageToClient(const Message& writtenMessage, bool bBroadcast = false);
     void SetErrorNotificationMessage(Message* pMessage, Message::AdminMessageType adminMessageType);
-    void ProcessRequestMessage(const Message& requestMessage, Message* pResponseMessage, bool* pIsBroadcastMessage);
+    bool ProcessRequestMessage(const Message& requestMessage, Message* pResponseMessage, bool* pIsBroadcastMessage);
 
     inline void StopServer() { m_bStop = true; }
     inline bool IsServerStopped() const { return m_bStop; }
@@ -48,6 +48,8 @@ private :
     SOCKET m_hSocket;
     sockaddr_in m_ServSockInfo;
     std::unordered_map<SOCKET, int64_t> m_ClientsMap;
+    std::unordered_map<std::string, SOCKET> m_NicknameMap;
+    std::unordered_map<SOCKET, std::string> m_NicknameReverseMap;
     std::vector<std::pair<SOCKET, sockaddr_in>> m_ClientsList;
 
     bool m_bGood;
